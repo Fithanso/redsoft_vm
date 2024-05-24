@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "redsoft-vm"
+version = "0.1.0"
+description = ""
+authors = ["Matvey <fms160602@gmail.com>"]
+readme = "README.md"
+packages = [{include = "redsoft_vm"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+asyncpg = "^0.29.0"
+pydantic = "^2.7.1"
+aioconsole = "^0.7.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
