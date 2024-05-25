@@ -1,11 +1,36 @@
 import asyncio
 import abc
-
+import logging
 
 from aioconsole import ainput
 
-
 import settings as project_settings
+
+class AsyncServer:
+    def __init__(self, host = project_settings.HOST, port = project_settings.PORT):
+        self.host = host
+        self.port = port
+        self.writer = None
+        self.reader = None
+
+    async def start(self) -> None:
+        server = await asyncio.start_server(
+            self.accept_connections, self.host, self.port
+        )
+        print('Serving on {}'.format(server.sockets[0].getsockname()))
+
+        async with server:
+            await server.serve_forever()
+
+
+    async def accept_connections(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        addr = writer.get_extra_info("peername")
+        logging.info(f"Connected by {addr}")
+        request_handler = AsyncRequestHandler(reader, writer)
+        await request_handler.process_request()
+
 
 class Command(metaclass=abc.ABCMeta):
     def __init__(self, reader, writer):
@@ -49,52 +74,36 @@ class CommandFactory:
         return cmd_cls, nome, numero
 
 
-async def main(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+class AsyncRequestHandler:
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        self.reader = reader
+        self.writer = writer
 
-    while True:
-        cmd = await ainput('Insert Command >')
-        cmd_cls, token_1, token_2 = CommandFactory.get_cmd(cmd)
-        print(cmd_cls)
-        if not cmd_cls:
-            print('Unknown: {}'.format(cmd))
-        else:
-            await cmd_cls(reader, writer).run()
-
-        await writer.drain()
-
-    # writer.close()
-    # await writer.wait_closed()
-
-async def run_server() -> None:
-    server = await asyncio.start_server(main, project_settings.HOST, project_settings.PORT)
-    print('Serving on {}'.format(server.sockets[0].getsockname()))
-    async with server:
+    async def process_request(self) -> None:
         try:
-            await server.serve_forever()
+
+            while True:
+                cmd = await ainput('Insert Command >')
+                cmd_cls, token_1, token_2 = CommandFactory.get_cmd(cmd)
+                print(cmd_cls)
+                if not cmd_cls:
+                    print('Unknown: {}'.format(cmd))
+                else:
+                    await cmd_cls(self.reader, self.writer).run()
+
+                await self.writer.drain()
         except KeyboardInterrupt:
-            pass
+            self.writer.close()
 
 
+async def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+    server = AsyncServer()
+    await server.start()
 
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_server())
 
-
-    # loop = asyncio.get_event_loop()
-    # # Each client connection will create a new protocol instance
-    # coro = loop.create_server(Server, project_settings.HOST, project_settings.PORT)
-    # server = loop.run_until_complete(coro)
-    # loop.run_until_complete(main(server))
-    #
-    # # Serve requests until Ctrl+C is pressed
-    # print('Serving on {}'.format(server.sockets[0].getsockname()))
-    # try:
-    #     loop.run_forever()
-    # except KeyboardInterrupt:
-    #     pass
-    #
-    # # Close the server
-    # server.close()
-    # loop.run_until_complete(server.wait_closed())
-    # loop.close()
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print('Server shut down. Good bye!')

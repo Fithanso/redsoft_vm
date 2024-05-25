@@ -10,12 +10,12 @@ async def run_client() -> None:
 
     while True:
         print('entered cycle')
-        data = await reader.read()
+        data = await reader.read(1024)
         print("red")
         if not data:
             raise Exception("socket closed")
 
-        print(f"Received: {data.decode()}")
+        print(f"Received: {data.decode()!r}")
 
 
 
