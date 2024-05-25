@@ -39,11 +39,12 @@ class ConnectToVMAction(Action):
                                                              self.db_connection)
         new_connection = Connection(id=None, end_dttm=None, virtual_machine_id=vm.id, connection_host=current_host,
                                     connection_port=current_port, start_dttm=datetime.now())
+        await ConnectionRepository.create(new_connection, self.db_connection)
 
         if vm.authorized_host == current_host:
             async with self.db_connection.transaction():
                 await self._close_old_connections(vm.id)
-                await ConnectionRepository.create(new_connection, self.db_connection)
+
             return f'Established connection with machine #{vm.id}.'
 
         login = await ainput(f'Authentication required for machine #{vm.id}. Enter login >')
@@ -53,10 +54,10 @@ class ConnectToVMAction(Action):
             async with self.db_connection.transaction():
                 await self._close_old_connections(vm.id)
                 await VirtualMachineRepository.update(vm.id, {'authorized_host': current_host}, self.db_connection)
-                await ConnectionRepository.create(new_connection, self.db_connection)
             return f'Successfully authenticated for VM #{vm.id}.'
 
-        return f'Login or password are invalid.'
+        await ConnectionRepository.update(new_connection.id, {'end_dttm': datetime.now()}, self.db_connection)
+        return f'Login or password are invalid. Connection closed.'
 
     async def _close_old_connections(self, vm_id):
         vm_opened_conns = await ConnectionRepository.opened_vm_connections(vm_id, self.db_connection)
@@ -77,6 +78,12 @@ class ShowEverConnectedAction(Action):
         return 'Ever connected VMs: \r\n' + utils.models_to_str(ever_connected_vms)
 
 
+class ShowAuthorizedAction(Action):
+    async def run(self, data_tokens):
+        authorized_vms = await VirtualMachineRepository.get_authorized(self.db_connection)
+        return 'Authenticated VMs: \r\n' + utils.models_to_str(authorized_vms)
+
+
 class QuitAction(Action):
     async def run(self, data_tokens):
         self.writer.write(b'Disconnected...')
@@ -93,6 +100,7 @@ class ActionFactory:
         'connect_to_vm': ConnectToVMAction,
         'show_connected': ShowCurrentlyConnectedAction,
         'show_ever_connected': ShowEverConnectedAction,
+        'show_authorized': ShowAuthorizedAction,
         'disconnect': QuitAction,
         'help': HelpAction
     }

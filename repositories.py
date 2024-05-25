@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 from models import VirtualMachine, HardDrive, Connection
 
+# TODO: мб для каждой машины надо строчкой считать объём дисков функцией аггрегации
+
 
 class AbstractRepository(abc.ABC):
 
@@ -61,6 +63,7 @@ class VirtualMachineRepository(AbstractRepository):
     async def get_connected(cls, db_connection: asyncpg.connection.Connection):
         rows = await db_connection.fetch('''
         SELECT v.* FROM connections c JOIN virtual_machines v ON c.virtual_machine_id = v.id WHERE c.end_dttm is NULL
+        ORDER BY v.id
         ''')
         return [cls.dto_model(**dict(row)) for row in rows]
 
@@ -68,6 +71,14 @@ class VirtualMachineRepository(AbstractRepository):
     async def get_ever_connected(cls, db_connection: asyncpg.connection.Connection):
         rows = await db_connection.fetch('''
         SELECT DISTINCT ON (v.id) v.* FROM connections c JOIN virtual_machines v ON c.virtual_machine_id = v.id
+        ORDER BY v.id
+        ''')
+        return [cls.dto_model(**dict(row)) for row in rows]
+
+    @classmethod
+    async def get_authorized(cls, db_connection: asyncpg.connection.Connection):
+        rows = await db_connection.fetch(f'''
+        SELECT * FROM {cls.table_name} WHERE authorized_host IS NOT NULL ORDER BY id
         ''')
         return [cls.dto_model(**dict(row)) for row in rows]
 
