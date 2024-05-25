@@ -6,7 +6,7 @@ import asyncpg
 from aioconsole import ainput
 
 import settings as project_settings
-from commands import CommandFactory
+from actions import ActionFactory
 
 
 class AsyncServer:
@@ -52,18 +52,18 @@ class AsyncRequestHandler:
         try:
 
             while True:
-                cmd = await ainput('Insert Command >')
-                cmd_cls = CommandFactory.get_cmd(cmd)
+                cmd = await ainput('Insert action >')
+                act_cls = ActionFactory.get_act(cmd)
                 data_tokens = self._get_data_tokens(cmd)
-                if cmd_cls:
+                if act_cls:
                     try:
-                        result = await cmd_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
+                        result = await act_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
                         if result:
                             print(result)
                     except Exception as e:
                         print(f'Error occurred. Details:{e!r}')
                 else:
-                    print('Unknown command: {}'.format(cmd))
+                    print('Unknown action: {}'.format(cmd))
 
                 await self.writer.drain()
         except KeyboardInterrupt:

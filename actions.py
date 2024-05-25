@@ -4,9 +4,10 @@ from typing import Union
 from models import VirtualMachine
 from repositories import VirtualMachineRepository
 from encryption import Crypt
+from aioconsole import ainput
 
 
-class Command(metaclass=abc.ABCMeta):
+class Action(metaclass=abc.ABCMeta):
     def __init__(self, reader, writer, db_connection):
         self.reader = reader
         self.writer = writer
@@ -17,7 +18,7 @@ class Command(metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
 
-class AddVMCommand(Command):
+class AddVMAction(Action):
     async def run(self, data_tokens):
 
         new_vm = VirtualMachine(id=None, ram_amount=data_tokens[0], dedicated_cpu=data_tokens[1], host=data_tokens[2],
@@ -27,38 +28,39 @@ class AddVMCommand(Command):
         return 'New VM was successfully created!'
 
 
-class ConnectToVMCommand(Command):
+class ConnectToVMAction(Action):
     async def run(self, data_tokens):
         # искать по host, port -> pydantic. если ее логин и пароль не совп, то ошибка. а иначе создаем объект connection
         # при отключении клиента и сервера authorized_host у вм не сбрасывается. сбрасывается по команде выхода
         row = await VirtualMachineRepository.get_vm_by_host_port(data_tokens[0], int(data_tokens[1]),
                                                                  self.db_connection)
         vm = VirtualMachine(**dict(row))
-
+        cmd = await ainput('VM found on requested host and port. Specify login and password >')
+        print(cmd)
         return f'Established connection with machine #{vm.id}.'
 
 
-class QuitCommand(Command):
+class QuitAction(Action):
     async def run(self, data_tokens):
         self.writer.write(b'Disconnected...')
 
 
-class HelpCommand(Command):
+class HelpAction(Action):
     async def run(self, data_tokens):
         print('Help')
 
 
-class CommandFactory:
-    _cmds = {
-        'add_vm': AddVMCommand,
-        'connect_to_vm': ConnectToVMCommand,
-        'disconnect': QuitCommand,
-        'help': HelpCommand
+class ActionFactory:
+    _acts = {
+        'add_vm': AddVMAction,
+        'connect_to_vm': ConnectToVMAction,
+        'disconnect': QuitAction,
+        'help': HelpAction
     }
 
     @classmethod
-    def get_cmd(cls, cmd):
+    def get_act(cls, cmd):
         tokens = cmd.split(' ')
         cmd = tokens[0]
-        cmd_cls = cls._cmds.get(cmd)
-        return cmd_cls
+        act_cls = cls._acts.get(cmd)
+        return act_cls
