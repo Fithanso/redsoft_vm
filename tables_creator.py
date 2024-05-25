@@ -2,6 +2,7 @@ import asyncio
 import asyncpg
 import datetime
 
+
 async def main():
     # Establish a connection to an existing database named "test"
     # as a "postgres" user.
@@ -12,10 +13,11 @@ async def main():
             id serial PRIMARY KEY,
             ram_amount double precision,
             dedicated_cpu smallint,
-            host char(128),
+            host varchar(128),
             port integer,
-            login char(128),
-            password char(128)
+            login varchar(128),
+            password varchar(128),
+            authorized_host varchar(128)
         )
     ''')
 
@@ -31,15 +33,15 @@ async def main():
         CREATE TABLE connections(
             id serial PRIMARY KEY,
             virtual_machine_id integer REFERENCES virtual_machines(id),
-            connection_host char(128),
+            connection_host varchar(128),
             connection_port integer,
             start_dttm timestamp with time zone,
             end_dttm timestamp with time zone
         )
     ''')
 
-
     # Close the connection.
     await conn.close()
+
 
 asyncio.get_event_loop().run_until_complete(main())

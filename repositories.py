@@ -17,5 +17,12 @@ class VirtualMachineRepository:
 
     @classmethod
     async def get_vm_by_id(cls, vm_id: int, db_connection: asyncpg.connection.Connection):
-        row = await db_connection.fetchrow('SELECT * FROM {cls.table_name} WHERE id = $1', )
+        row = await db_connection.fetchrow(f'SELECT * FROM {cls.table_name} WHERE id = $1', vm_id)
+        return row
+
+    @classmethod
+    async def get_vm_by_host_port(cls, vm_host: str, vm_port: int, db_connection: asyncpg.connection.Connection):
+        row = await db_connection.fetchrow(f'SELECT * FROM {cls.table_name} WHERE host = $1 AND port = $2',
+                                           vm_host, vm_port)
+        return row
 

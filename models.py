@@ -11,6 +11,8 @@ class VirtualMachine(BaseModel):
     port: int
     login: str
     password: str
+    authorized_host: str | None
+    # авторизации нам не нужно хранить, поэтому можно не делать под это модель
 
 
 class HardDrive(BaseModel):
