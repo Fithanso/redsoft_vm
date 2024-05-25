@@ -56,12 +56,12 @@ class AsyncRequestHandler:
                 act_cls = ActionFactory.get_act(cmd)
                 data_tokens = self._get_data_tokens(cmd)
                 if act_cls:
-                    try:
-                        result = await act_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
-                        if result:
-                            print(result)
-                    except Exception as e:
-                        print(f'Error occurred. Details:{e!r}')
+                    # try:
+                    result = await act_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
+                    if result:
+                        print(result)
+                    # except Exception as e:
+                    #     print(f'Error occurred. Details:{e!r}')
                 else:
                     print('Unknown action: {}'.format(cmd))
 

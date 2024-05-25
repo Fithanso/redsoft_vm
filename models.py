@@ -16,13 +16,14 @@ class VirtualMachine(BaseModel):
 
 
 class HardDrive(BaseModel):
-    id: int
+    id: int | None
     size: float
     virtual_machine_id: int
 
 
 # тут хранятся подключения к машинам. если end_dttm не указан, значит подключение активно
 class Connection(BaseModel):
+    id: int | None
     virtual_machine_id: int
     connection_host: str | None
     connection_port: int | None
