@@ -2,12 +2,15 @@ import asyncio
 import abc
 import logging
 
+import asyncpg
 from aioconsole import ainput
 
 import settings as project_settings
+from commands import CommandFactory
+
 
 class AsyncServer:
-    def __init__(self, host = project_settings.HOST, port = project_settings.PORT):
+    def __init__(self, host=project_settings.HOST, port=project_settings.PORT):
         self.host = host
         self.port = port
         self.writer = None
@@ -22,78 +25,52 @@ class AsyncServer:
         async with server:
             await server.serve_forever()
 
-
-    async def accept_connections(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def accept_connections(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logging.info(f"Connected by {addr}")
-        request_handler = AsyncRequestHandler(reader, writer)
-        await request_handler.process_request()
 
+        conn = await self._connect_to_db()
+        request_handler = AsyncRequestHandler(reader, writer, conn)
+        await request_handler.process_input()
 
-class Command(metaclass=abc.ABCMeta):
-    def __init__(self, reader, writer):
-        self.reader = reader
-        self.writer = writer
-
-    @abc.abstractmethod
-    async def run(self, a, b):
-        raise NotImplementedError()
-
-
-class XCommand(Command):
-    async def run(self, param1=None, param2=None):
-        self.writer.write(b'Command X')
-
-
-class YCommand(Command):
-    async def run(self, param1=None, param2=None):
-        self.writer.write(b'Command Y')
-
-
-class QuitCommand(Command):
-    async def run(self, param1=None, param2=None):
-        self.writer.write(b'Disconnected...')
-
-
-class CommandFactory:
-    _cmds = {'X': XCommand,
-         'Y': YCommand,
-         'DISCONNECT': QuitCommand}
-
-    @classmethod
-    def get_cmd(cls, cmd):
-        tokens = cmd.split(':')
-        cmd = tokens[0]
-        if len(tokens) == 1:
-            nome, numero = None, None
-        else:
-            nome, numero = (tokens[1], tokens[2]) if len(tokens) == 3 else (tokens[1], None)
-        cmd_cls = cls._cmds.get(cmd)
-        return cmd_cls, nome, numero
+    async def _connect_to_db(self):
+        try:
+            conn = await asyncpg.connect('postgresql://{}:{}@localhost/{}'.format(
+                project_settings.DB_USER, project_settings.DB_PASSWORD, project_settings.DB_NAME))
+            return conn
+        except Exception as e:
+            print('Unable to connect to DB')
 
 
 class AsyncRequestHandler:
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, conn: asyncpg.connection.Connection):
         self.reader = reader
         self.writer = writer
+        self.db_connection = conn
 
-    async def process_request(self) -> None:
+    async def process_input(self) -> None:
         try:
 
             while True:
                 cmd = await ainput('Insert Command >')
-                cmd_cls, token_1, token_2 = CommandFactory.get_cmd(cmd)
-                print(cmd_cls)
-                if not cmd_cls:
-                    print('Unknown: {}'.format(cmd))
+                cmd_cls = CommandFactory.get_cmd(cmd)
+                data_tokens = self._get_data_tokens(cmd)
+                if cmd_cls:
+                    try:
+                        result = await cmd_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
+                        if result:
+                            print(result)
+                    except Exception as e:
+                        print(f'Error occurred. Details:{e!r}')
                 else:
-                    await cmd_cls(self.reader, self.writer).run()
+                    print('Unknown command: {}'.format(cmd))
 
                 await self.writer.drain()
         except KeyboardInterrupt:
             self.writer.close()
+
+    def _get_data_tokens(self, cmd):
+        return cmd.split(' ')[1:]
 
 
 async def main() -> None:

@@ -2,8 +2,9 @@ from pydantic import BaseModel
 
 from datetime import datetime
 
+
 class VirtualMachine(BaseModel):
-    id : int
+    id: int | None
     ram_amount: float
     dedicated_cpu: int
     host: str
@@ -16,6 +17,7 @@ class HardDrive(BaseModel):
     id: int
     size: float
     virtual_machine_id: int
+
 
 # тут хранятся подключения к машинам. если end_dttm не указан, значит подключение активно
 class Connection(BaseModel):
