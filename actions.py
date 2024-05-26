@@ -8,6 +8,7 @@ from encryption import Crypt
 from aioconsole import ainput
 import settings as project_settings
 import utils
+# TODO: перенести аутентификацию на сторону клиента
 
 
 class Action(metaclass=abc.ABCMeta):
@@ -22,7 +23,7 @@ class Action(metaclass=abc.ABCMeta):
 
 
 class AddVMAction(Action):
-    async def run(self, data_tokens):
+    async def run(self, data_tokens) -> Union[str, None]:
         new_vm = VirtualMachine(id=None, ram_amount=data_tokens[0], dedicated_cpu=data_tokens[1], host=data_tokens[2],
                                 port=data_tokens[3], login=data_tokens[4], password=Crypt().encrypt(data_tokens[5]),
                                 authorized_host=None)
@@ -31,62 +32,94 @@ class AddVMAction(Action):
 
 
 class ConnectToVMAction(Action):
-    async def run(self, data_tokens):
+    async def run(self, data_tokens) -> Union[str, None]:
         current_host = project_settings.HOST
         current_port = project_settings.PORT
         # при отключении клиента и сервера authorized_host у вм не сбрасывается. сбрасывается по команде выхода
         vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
                                                              self.db_connection)
-        new_connection = Connection(id=None, end_dttm=None, virtual_machine_id=vm.id, connection_host=current_host,
-                                    connection_port=current_port, start_dttm=datetime.now())
-        await ConnectionRepository.create(new_connection, self.db_connection)
+        await ConnectionRepository.open_connection(current_host, current_port, vm, self.db_connection)
 
-        if vm.authorized_host == current_host:
-            async with self.db_connection.transaction():
-                await self._close_old_connections(vm.id)
-
-            return f'Established connection with machine #{vm.id}.'
+        if await VirtualMachineRepository.is_authorized(current_host, vm):
+            return f'Already authenticated. Established connection with machine #{vm.id}.'
 
         login = await ainput(f'Authentication required for machine #{vm.id}. Enter login >')
         password = await ainput('Enter password >')
 
-        if login == vm.login and password == Crypt().decrypt(str(vm.password)):
-            async with self.db_connection.transaction():
-                await self._close_old_connections(vm.id)
-                await VirtualMachineRepository.update(vm.id, {'authorized_host': current_host}, self.db_connection)
-            return f'Successfully authenticated for VM #{vm.id}.'
+        if await VirtualMachineRepository.authenticate(login, password, vm):
+            await VirtualMachineRepository.authorize(current_host, vm, self.db_connection)
+            return f'Successfully authenticated for VM {vm.host}:{vm.port}.'
 
-        await ConnectionRepository.update(new_connection.id, {'end_dttm': datetime.now()}, self.db_connection)
+        await ConnectionRepository.close_vm_connections(vm.id, self.db_connection)
         return f'Login or password are invalid. Connection closed.'
-
-    async def _close_old_connections(self, vm_id):
-        vm_opened_conns = await ConnectionRepository.opened_vm_connections(vm_id, self.db_connection)
-        for conn in vm_opened_conns:
-            await ConnectionRepository.update(conn.id, {'end_dttm': datetime.now()}, self.db_connection)
 
 
 class ShowCurrentlyConnectedAction(Action):
-    async def run(self, data_tokens):
+    async def run(self, data_tokens) -> Union[str, None]:
         connected_vms = await VirtualMachineRepository.get_connected(self.db_connection)
 
         return 'Currently connected VMs: \r\n' + utils.models_to_str(connected_vms)
 
 
 class ShowEverConnectedAction(Action):
-    async def run(self, data_tokens):
+    async def run(self, data_tokens) -> Union[str, None]:
         ever_connected_vms = await VirtualMachineRepository.get_ever_connected(self.db_connection)
         return 'Ever connected VMs: \r\n' + utils.models_to_str(ever_connected_vms)
 
 
 class ShowAuthorizedAction(Action):
-    async def run(self, data_tokens):
+    async def run(self, data_tokens) -> Union[str, None]:
         authorized_vms = await VirtualMachineRepository.get_authorized(self.db_connection)
         return 'Authenticated VMs: \r\n' + utils.models_to_str(authorized_vms)
 
 
-class QuitAction(Action):
-    async def run(self, data_tokens):
-        self.writer.write(b'Disconnected...')
+class LogoutAction(Action):
+    async def run(self, data_tokens) -> Union[str, None]:
+        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
+                                                             self.db_connection)
+        current_host = project_settings.HOST
+
+        if not await VirtualMachineRepository.is_authorized(current_host, vm):
+            return f'Error. You are not authenticated.'
+
+        await VirtualMachineRepository.update(vm.id, {'authorized_host': 'NULL'}, self.db_connection)
+        return f'Logged out from VM {vm.host}:{vm.port}.'
+
+
+class DisconnectAction(Action):
+    async def run(self, data_tokens) -> Union[str, None]:
+        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
+                                                             self.db_connection)
+        await ConnectionRepository.close_vm_connections(vm.id, self.db_connection)
+        return f'Disconnected from VM {vm.host}:{vm.port}.'
+
+
+class UpdateVMAction(Action):
+
+    async def run(self, data_tokens) -> Union[str, None]:
+        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
+                                                             self.db_connection)
+        current_host = project_settings.HOST
+
+        if not await VirtualMachineRepository.is_authorized(current_host, vm):
+            return f'Error. You are not authenticated.'
+
+        update_data = data_tokens[2:]
+        validated_data = await self._validate_dto(vm, update_data)
+
+        await VirtualMachineRepository.update(vm.id, validated_data, self.db_connection)
+        return f'VM {vm.host}:{vm.port} was successfully updated.'
+
+    async def _validate_dto(self, vm, update_data):
+        update_data = {field_value.split(':')[0]: field_value.split(':')[1] for field_value in update_data}
+        for field_name, value in update_data.items():
+            if field_name in VirtualMachine.SAFE_FIELDS:
+                continue
+            if field_name == 'password':
+                value = Crypt().encrypt(value)
+            setattr(vm, field_name, value)
+
+        return dict(vm)
 
 
 class HelpAction(Action):
@@ -101,7 +134,9 @@ class ActionFactory:
         'show_connected': ShowCurrentlyConnectedAction,
         'show_ever_connected': ShowEverConnectedAction,
         'show_authorized': ShowAuthorizedAction,
-        'disconnect': QuitAction,
+        'update_vm': UpdateVMAction,
+        'logout': LogoutAction,
+        'disconnect': DisconnectAction,
         'help': HelpAction
     }
 

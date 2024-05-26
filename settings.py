@@ -19,4 +19,7 @@ COMMANDS = '''
 
 # test strings
 # add_vm 16 4 127.0.0.5 8000 fithanso passwrd
-# connect_to_vm 127.0.0.5 8000
+# connect_to_vm 127.0.0.7 8000
+# logout 127.0.0.7 8000
+# disconnect 127.0.0.7 8000
+# update_vm 127.0.0.7 8000 ram_amount:16 dedicated_cpu:10
