@@ -8,6 +8,8 @@ from encryption import Crypt
 from aioconsole import ainput
 import settings as project_settings
 import utils
+
+
 # TODO: перенести аутентификацию на сторону клиента
 # TODO: создание вм переделать - аргументы через двоеточие
 
@@ -37,8 +39,9 @@ class ConnectToVMAction(Action):
         current_host = project_settings.HOST
         current_port = project_settings.PORT
         # при отключении клиента и сервера authorized_host у вм не сбрасывается. сбрасывается по команде выхода
-        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
-                                                             self.db_connection)
+        vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
+                                                self.db_connection)
+        vm = vm[0]
         await ConnectionRepository.open_connection(current_host, current_port, vm, self.db_connection)
 
         if await VirtualMachineRepository.is_authorized(current_host, vm):
@@ -76,8 +79,9 @@ class ShowAuthorizedAction(Action):
 
 class LogoutAction(Action):
     async def run(self, data_tokens) -> Union[str, None]:
-        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
-                                                             self.db_connection)
+        vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
+                                                self.db_connection)
+        vm = vm[0]
         current_host = project_settings.HOST
 
         if not await VirtualMachineRepository.is_authorized(current_host, vm):
@@ -89,8 +93,8 @@ class LogoutAction(Action):
 
 class DisconnectAction(Action):
     async def run(self, data_tokens) -> Union[str, None]:
-        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
-                                                             self.db_connection)
+        vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
+                                                self.db_connection)
         await ConnectionRepository.close_vm_connections(vm.id, self.db_connection)
         return f'Disconnected from VM {vm.host}:{vm.port}.'
 
@@ -98,8 +102,9 @@ class DisconnectAction(Action):
 class UpdateVMAction(Action):
 
     async def run(self, data_tokens) -> Union[str, None]:
-        vm = await VirtualMachineRepository.get_by_host_port(data_tokens[0], int(data_tokens[1]),
-                                                             self.db_connection)
+        vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
+                                                self.db_connection)
+        vm = vm[0]
         current_host = project_settings.HOST
 
         if not await VirtualMachineRepository.is_authorized(current_host, vm):

@@ -23,7 +23,7 @@ class AbstractRepository(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get(self, obj_id: int, db_connection: asyncpg.connection.Connection) -> BaseModel:
+    def get(self, params: dict, db_connection: asyncpg.connection.Connection) -> BaseModel:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -44,15 +44,28 @@ class VirtualMachineRepository(AbstractRepository):
             obj.password)
 
     @classmethod
-    async def get(cls, obj_id: int, db_connection: asyncpg.connection.Connection):
-        row = await db_connection.fetchrow(f'SELECT * FROM {cls.table_name} WHERE id = $1', obj_id)
-        return cls.dto_model(**dict(row))
+    async def get(cls, params: dict, db_connection: asyncpg.connection.Connection, mode='AND'):
+        params_str = ''
+        offset = 1
 
-    @classmethod
-    async def get_by_host_port(cls, vm_host: str, vm_port: int, db_connection: asyncpg.connection.Connection):
-        row = await db_connection.fetchrow(f'SELECT * FROM {cls.table_name} WHERE host = $1 AND port = $2 LIMIT 1',
-                                           vm_host, vm_port)
-        return cls.dto_model(**dict(row))
+        for item in enumerate(params.keys(), offset):
+            num = item[0]
+            key = item[1]
+
+            params_str += str(key) + '=$' + str(num)
+            if num != len(params.keys()) + offset - 1:
+                params_str += f' {mode} '
+
+        rows = await db_connection.fetch(f'''
+        SELECT 
+        DISTINCT ON (v.id) v.*, SUM(hd.size) as hard_drive_space, json_agg(hd.id) as hard_drives_ids 
+        FROM {cls.table_name} v
+            LEFT JOIN hard_drives hd ON hd.virtual_machine_id = v.id
+            WHERE v.id IN (SELECT v.id FROM connections c WHERE c.virtual_machine_id = v.id) AND {params_str}
+        
+        GROUP BY v.id
+        ''', *list(params.values()))
+        return [cls.dto_model(**dict(row)) for row in rows]
 
     @classmethod
     async def update(cls, obj_id: int, params: dict, db_connection: asyncpg.connection.Connection):
@@ -137,9 +150,20 @@ class ConnectionRepository(AbstractRepository):
             obj.start_dttm, obj.end_dttm)
 
     @classmethod
-    async def get(cls, obj_id: int, db_connection: asyncpg.connection.Connection):
-        row = await db_connection.fetchrow(f'SELECT * FROM {cls.table_name} WHERE id = $1', obj_id)
-        return cls.dto_model(**dict(row))
+    async def get(cls, params: dict, db_connection: asyncpg.connection.Connection, mode='AND') -> List[BaseModel]:
+        params_str = ''
+        offset = 1
+
+        for item in enumerate(params.keys(), offset):
+            num = item[0]
+            key = item[1]
+
+            params_str += str(key) + '=$' + str(num)
+            if num != len(params.keys()) + offset - 1:
+                params_str += f' {mode} '
+
+        rows = await db_connection.fetch(f'SELECT * FROM {cls.table_name} WHERE {params_str}', *list(params.values()))
+        return [cls.dto_model(**dict(row)) for row in rows]
 
     @classmethod
     async def update(cls, obj_id: int, params: dict, db_connection: asyncpg.connection.Connection):
@@ -152,22 +176,6 @@ class ConnectionRepository(AbstractRepository):
         await db_connection.execute(
             f'UPDATE {cls.table_name} SET {params_str} WHERE id=$1',
             obj_id, *list(params.values()))
-
-    @classmethod
-    async def filter_and(cls, params: dict, db_connection: asyncpg.connection.Connection) -> List[BaseModel]:
-        params_str = ''
-        offset = 1
-
-        for item in enumerate(params.keys(), offset):
-            num = item[0]
-            key = item[1]
-
-            params_str += str(key) + '=$' + str(num)
-            if num != len(params.keys()) + offset - 1:
-                params_str += ' AND '
-
-        rows = await db_connection.fetch(f'SELECT * FROM {cls.table_name} WHERE {params_str}', *list(params.values()))
-        return [cls.dto_model(**dict(row)) for row in rows]
 
     @classmethod
     async def opened_vm_connections(cls, vm_id: int, db_connection: asyncpg.connection.Connection) -> List[BaseModel]:
