@@ -4,8 +4,20 @@ from typing import ClassVar, List
 from pydantic import BaseModel, Field
 
 
-class VirtualMachine(BaseModel):
-    SAFE_FIELDS: ClassVar[list] = ['id', 'authorized_host']
+class VirtualMachineInput(BaseModel):
+    ram_amount: float
+    dedicated_cpu: int
+    host: str
+    port: int
+    login: str
+    password: str
+
+    class Config:
+        validate_assignment = True
+
+
+class VirtualMachineOutput(BaseModel):
+    READONLY_FIELDS: ClassVar[List] = ['id', 'authorized_host', 'hard_drives_ids', 'hard_drive_space']
 
     id: int | None
     ram_amount: float
@@ -38,3 +50,19 @@ class Connection(BaseModel):
 
     class Config:
         validate_assignment = True
+
+
+class HardDriveWithVirtualMachine(BaseModel):
+
+    hard_drive_id: int | None
+    size: float
+
+    virtual_machine_id: int
+    ram_amount: float
+    dedicated_cpu: int
+    host: str
+    port: int
+    authorized_host: str | None
+    hard_drive_space: float = 0
+
+
