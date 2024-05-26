@@ -8,9 +8,13 @@ from pydantic import BaseModel
 from models import VirtualMachine, HardDrive, Connection
 from encryption import Crypt
 
-# TODO: мб для каждой машины надо строчкой считать объём дисков функцией аггрегации
-# обновляет данные в авторизованной вм - команда обновления, но с проверкой аута
 
+# SELECT DISTINCT ON (v.id) v.*, SUM(hd.size) as hard_drive_space, json_agg(hd.id) as hard_drives_ids FROM virtual_machines v
+# 	LEFT JOIN hard_drives hd ON hd.virtual_machine_id = v.id
+# 	WHERE v.id IN (SELECT v.id FROM connections c WHERE c.virtual_machine_id = v.id)
+#
+# GROUP BY v.id
+# ORDER BY v.id
 
 class AbstractRepository(abc.ABC):
 
@@ -73,17 +77,29 @@ class VirtualMachineRepository(AbstractRepository):
 
     @classmethod
     async def get_connected(cls, db_connection: asyncpg.connection.Connection):
-        rows = await db_connection.fetch('''
-        SELECT v.* FROM connections c JOIN virtual_machines v ON c.virtual_machine_id = v.id WHERE c.end_dttm is NULL
-        ORDER BY v.id
+        rows = await db_connection.fetch(f'''
+        SELECT 
+        DISTINCT ON (v.id) v.*, COALESCE(SUM(hd.size), 0) as hard_drive_space, json_arrayagg(hd.id) as hard_drives_ids  
+        FROM {cls.table_name} v
+        
+        LEFT JOIN hard_drives hd ON hd.virtual_machine_id = v.id
+        WHERE v.id IN (SELECT v.id FROM connections c WHERE c.virtual_machine_id = v.id AND c.end_dttm is NULL)
+        
+        GROUP BY v.id ORDER BY v.id
         ''')
         return [cls.dto_model(**dict(row)) for row in rows]
 
     @classmethod
     async def get_ever_connected(cls, db_connection: asyncpg.connection.Connection):
-        rows = await db_connection.fetch('''
-        SELECT DISTINCT ON (v.id) v.* FROM connections c JOIN virtual_machines v ON c.virtual_machine_id = v.id
-        ORDER BY v.id
+        rows = await db_connection.fetch(f'''
+        SELECT 
+        DISTINCT ON (v.id) v.*, COALESCE(SUM(hd.size), 0) as hard_drive_space, json_arrayagg(hd.id) as hard_drives_ids  
+        FROM {cls.table_name} v
+        
+        LEFT JOIN hard_drives hd ON hd.virtual_machine_id = v.id
+        WHERE v.id IN (SELECT v.id FROM connections c WHERE c.virtual_machine_id = v.id)
+        
+        GROUP BY v.id ORDER BY v.id
         ''')
         return [cls.dto_model(**dict(row)) for row in rows]
 

@@ -9,6 +9,7 @@ from aioconsole import ainput
 import settings as project_settings
 import utils
 # TODO: перенести аутентификацию на сторону клиента
+# TODO: создание вм переделать - аргументы через двоеточие
 
 
 class Action(metaclass=abc.ABCMeta):

@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import ClassVar
+from typing import ClassVar, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VirtualMachine(BaseModel):
@@ -15,6 +15,8 @@ class VirtualMachine(BaseModel):
     login: str
     password: str
     authorized_host: str | None
+    hard_drives_ids: str | None
+    hard_drive_space: float = 0
 
     class Config:
         validate_assignment = True
