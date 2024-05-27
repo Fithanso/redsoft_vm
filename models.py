@@ -16,8 +16,9 @@ class VirtualMachineInput(BaseModel):
         validate_assignment = True
 
 
-class VirtualMachineOutput(BaseModel):
-    READONLY_FIELDS: ClassVar[List] = ['id', 'hard_drives_ids', 'hard_drive_space']
+# мы хотим сделать так, чтобы при выводе в консоль не было секретов.
+class VirtualMachine(BaseModel):
+    READONLY_FIELDS: ClassVar[List] = ['id']
 
     id: int | None
     ram_amount: float
@@ -26,6 +27,20 @@ class VirtualMachineOutput(BaseModel):
     port: int
     login: str
     password: str
+    authorized_host: str | None
+
+    class Config:
+        validate_assignment = True
+
+
+class VirtualMachineOutput(BaseModel):
+    READONLY_FIELDS: ClassVar[List] = ['id', 'hard_drives_ids', 'hard_drive_space']
+
+    id: int | None
+    ram_amount: float
+    dedicated_cpu: int
+    host: str
+    port: int
     authorized_host: str | None
     hard_drives_ids: str | None
     hard_drive_space: float = 0
@@ -53,7 +68,6 @@ class Connection(BaseModel):
 
 
 class HardDriveWithVirtualMachine(BaseModel):
-
     hard_drive_id: int | None
     size: float
 
@@ -64,5 +78,3 @@ class HardDriveWithVirtualMachine(BaseModel):
     port: int
     authorized_host: str | None
     hard_drive_space: float = 0
-
-

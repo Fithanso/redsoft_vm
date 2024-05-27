@@ -5,7 +5,7 @@ import asyncpg
 import abc
 from pydantic import BaseModel
 
-from models import VirtualMachineInput, VirtualMachineOutput, HardDrive, Connection, HardDriveWithVirtualMachine
+from models import VirtualMachineInput, VirtualMachineOutput, VirtualMachine, HardDrive, Connection, HardDriveWithVirtualMachine
 from encryption import Crypt
 
 
@@ -53,12 +53,12 @@ class VirtualMachineRepository(AbstractRepository):
         
         GROUP BY v.id
         ''', *list(params.values()))
-        return [cls.dto_model(**dict(row)) for row in rows]
+        return [VirtualMachine(**dict(row)) for row in rows]
 
     @classmethod
     async def update(cls, obj_id: int, params: dict, db_connection: asyncpg.connection.Connection):
 
-        for field_to_remove in VirtualMachineOutput.READONLY_FIELDS:
+        for field_to_remove in VirtualMachine.READONLY_FIELDS:
             params.pop(field_to_remove, None)
 
         params_str = ''

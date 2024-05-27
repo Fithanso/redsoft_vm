@@ -60,7 +60,8 @@ class ConnectToVMAction(Action):
                           f'has established connection and is trying to authenticate'.encode())
         await self.writer.drain()
         answer = await self.reader.read(1024)
-        answer = answer.decode
+
+        answer = answer.decode()
         if answer == 'OK':
             await VirtualMachineRepository.authorize(server_host, vm, self.db_connection)
             self.writer.write(f'Host {server_host} was successfully authenticated.'.encode())
