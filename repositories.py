@@ -5,12 +5,11 @@ import asyncpg
 import abc
 from pydantic import BaseModel
 
-from models import VirtualMachineInput, VirtualMachineOutput, VirtualMachine, HardDrive, Connection, HardDriveWithVirtualMachine
+from models import (VirtualMachineInput, VirtualMachineOutput, VirtualMachine, HardDrive, Connection,
+                    HardDriveWithVirtualMachine)
 from encryption import Crypt
+from query_builders import WhereBuilder, SetBuilder
 
-
-# TODO: удалить из выдаваемых полей машины пароль и логин. либо сделать нейтральную модель,
-#  которая не выводится в консоль
 
 class AbstractRepository(abc.ABC):
 
@@ -34,15 +33,9 @@ class VirtualMachineRepository(AbstractRepository):
 
     @classmethod
     async def get(cls, params: dict, db_connection: asyncpg.connection.Connection, mode='AND'):
-        params_str = ''
+
         offset = 1
-
-        for item in enumerate(params.keys(), offset):
-            num, key = item[0], item[1]
-
-            params_str += str(key) + '=$' + str(num)
-            if num != len(params.keys()) + offset - 1:
-                params_str += f' {mode} '
+        params_str = WhereBuilder.build(params, offset, mode)
 
         rows = await db_connection.fetch(f'''
         SELECT 
@@ -61,22 +54,8 @@ class VirtualMachineRepository(AbstractRepository):
         for field_to_remove in VirtualMachine.READONLY_FIELDS:
             params.pop(field_to_remove, None)
 
-        params_str = ''
-        params_copy = params.copy()
         offset = 2
-
-        # needs to be refactored to correctly handle NULL value
-        for item in enumerate(params.keys(), offset):
-            num, key = item[0], item[1]
-            params_str += str(key) + '='
-            if params.get(key) == 'NULL' or params.get(key) == 'null':
-                params_str += 'NULL'
-                del params_copy[key]
-            else:
-                params_str += '$' + str(num)
-
-            if num != len(params.keys()) + offset - 1:
-                params_str += ', '
+        params_str, params_copy = SetBuilder.build(params, params.copy(), offset)
 
         await db_connection.execute(
             f'UPDATE {cls.table_name} SET {params_str} WHERE id=$1',
@@ -156,15 +135,9 @@ class ConnectionRepository(AbstractRepository):
 
     @classmethod
     async def get(cls, params: dict, db_connection: asyncpg.connection.Connection, mode='AND') -> List[BaseModel]:
-        params_str = ''
+
         offset = 1
-
-        for item in enumerate(params.keys(), offset):
-            num, key = item[0], item[1]
-
-            params_str += str(key) + '=$' + str(num)
-            if num != len(params.keys()) + offset - 1:
-                params_str += f' {mode} '
+        params_str = WhereBuilder.build(params, offset, mode)
 
         rows = await db_connection.fetch(f'SELECT * FROM {cls.table_name} WHERE {params_str}', *list(params.values()))
         return [cls.dto_model(**dict(row)) for row in rows]
@@ -172,21 +145,8 @@ class ConnectionRepository(AbstractRepository):
     @classmethod
     async def update(cls, obj_id: int, params: dict, db_connection: asyncpg.connection.Connection):
 
-        params_str = ''
-        params_copy = params.copy()
         offset = 2
-
-        for item in enumerate(params.keys(), offset):
-            num, key = item[0], item[1]
-            params_str += str(key) + '='
-            if params.get(key) == 'NULL' or params.get(key) == 'null':
-                params_str += 'NULL'
-                del params_copy[key]
-            else:
-                params_str += '$' + str(num)
-
-            if num != len(params.keys()) + offset - 1:
-                params_str += ', '
+        params_str, params_copy = SetBuilder.build(params, params.copy(), offset)
 
         await db_connection.execute(
             f'UPDATE {cls.table_name} SET {params_str} WHERE id=$1',
@@ -220,15 +180,9 @@ class HardDriveRepository(AbstractRepository):
 
     @classmethod
     async def get(cls, params: dict, db_connection: asyncpg.connection.Connection, mode='AND') -> List[BaseModel]:
-        params_str = ''
+
         offset = 1
-
-        for item in enumerate(params.keys(), offset):
-            num, key = item[0], item[1]
-
-            params_str += str(key) + '=$' + str(num)
-            if num != len(params.keys()) + offset - 1:
-                params_str += f' {mode} '
+        params_str = WhereBuilder.build(params, offset, mode)
 
         rows = await db_connection.fetch(f'SELECT * FROM {cls.table_name} WHERE {params_str}', *list(params.values()))
         return [cls.dto_model(**dict(row)) for row in rows]

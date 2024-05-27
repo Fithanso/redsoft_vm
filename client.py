@@ -30,7 +30,7 @@ async def run_client() -> None:
             print("Socket closed")
             return
         decoded_data = DecodedData(data)
-
+        print(f"Message: {decoded_data!r}")
         if decoded_data.action:
             act_cls = ClientActionFactory.get_act(decoded_data.action)
             if act_cls:
