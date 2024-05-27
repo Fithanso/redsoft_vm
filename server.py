@@ -6,11 +6,11 @@ import asyncpg
 from aioconsole import ainput
 
 import settings as project_settings
-from actions import ActionFactory
+from server_actions import ServerActionFactory
 
 
 class AsyncServer:
-    def __init__(self, host=project_settings.HOST, port=project_settings.PORT):
+    def __init__(self, host=project_settings.SERVER_HOST, port=project_settings.SERVER_PORT):
         self.host = host
         self.port = port
         self.writer = None
@@ -53,15 +53,15 @@ class AsyncRequestHandler:
 
             while True:
                 cmd = await ainput('Insert action >')
-                act_cls = ActionFactory.get_act(cmd)
+                act_cls = ServerActionFactory.get_act(cmd)
                 data_tokens = self._get_data_tokens(cmd)
                 if act_cls:
-                    # try:
-                    result = await act_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
-                    if result:
-                        print(result)
-                    # except Exception as e:
-                    #     print(f'Error occurred. Details:{e!r}')
+                    try:
+                        result = await act_cls(self.reader, self.writer, self.db_connection).run(data_tokens)
+                        if result:
+                            print(result)
+                    except Exception as e:
+                        print(f'Error occurred. Details:{e!r}')
                 else:
                     print('Unknown action: {}'.format(cmd))
 

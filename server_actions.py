@@ -10,14 +10,12 @@ import settings as project_settings
 import utils
 
 
-# TODO: перенести аутентификацию на сторону клиента
-
-
 class Action(metaclass=abc.ABCMeta):
     def __init__(self, reader, writer, db_connection):
         self.reader = reader
         self.writer = writer
         self.db_connection = db_connection
+        self.client_action_delimiter = '%%'
 
     @abc.abstractmethod
     async def run(self, data_tokens) -> Union[str, None]:
@@ -44,27 +42,30 @@ class AddVMAction(Action):
 
 class ConnectToVMAction(Action):
     async def run(self, data_tokens) -> str:
-        current_host = project_settings.HOST
-        current_port = project_settings.PORT
-        # при отключении клиента и сервера authorized_host у вм не сбрасывается. сбрасывается по команде выхода
+        server_host = project_settings.SERVER_HOST
+        server_port = project_settings.SERVER_PORT
+        # VM's authorized_host will be reset only if server's user will run 'logout' command
+        # Connection will be closed (end_dttm will receive its value) if user runs 'disconnect' command
         vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
                                                 self.db_connection)
         vm = vm[0]
-        await ConnectionRepository.open_connection(current_host, current_port, vm, self.db_connection)
+        await ConnectionRepository.open_connection(server_host, server_port, vm, self.db_connection)
 
-        if await VirtualMachineRepository.is_authorized(current_host, vm):
+        if await VirtualMachineRepository.is_authorized(server_host, vm):
             return f'Already authenticated. Established connection with machine #{vm.id}.'
 
         login = await ainput(f'Authentication required for machine #{vm.id}. Enter login >')
         password = await ainput('Enter password >')
-
-        if await VirtualMachineRepository.authenticate(login, password, vm):
-            await VirtualMachineRepository.authorize(current_host, vm, self.db_connection)
-
-            self.writer.write(f'secret:mecret|||Host {current_host} has established connection.'.encode())
+        self.writer.write(f'client_auth{self.client_action_delimiter}{login}:{password}|||Host {server_host} '
+                          f'has established connection and is trying to authenticate'.encode())
+        await self.writer.drain()
+        answer = await self.reader.read(1024)
+        answer = answer.decode
+        if answer == 'OK':
+            await VirtualMachineRepository.authorize(server_host, vm, self.db_connection)
+            self.writer.write(f'Host {server_host} was successfully authenticated.'.encode())
             await self.writer.drain()
-            msg = await self.reader.read(1024)
-            return f'Successfully authenticated for VM {vm.host}:{vm.port}. {msg}'
+            return f'Successfully authenticated for VM {vm.host}:{vm.port}.'
 
         await ConnectionRepository.close_vm_connections(vm.id, self.db_connection)
         return f'Login or password are invalid. Connection closed.'
@@ -94,9 +95,9 @@ class LogoutAction(Action):
         vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
                                                 self.db_connection)
         vm = vm[0]
-        current_host = project_settings.HOST
+        server_host = project_settings.SERVER_HOST
 
-        if not await VirtualMachineRepository.is_authorized(current_host, vm):
+        if not await VirtualMachineRepository.is_authorized(server_host, vm):
             return f'Error. You are not authenticated.'
 
         await VirtualMachineRepository.nullify_authorized_host(vm.id, self.db_connection)
@@ -118,9 +119,9 @@ class UpdateVMAction(Action):
         vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
                                                 self.db_connection)
         vm = vm[0]
-        current_host = project_settings.HOST
+        server_host = project_settings.SERVER_HOST
 
-        if not await VirtualMachineRepository.is_authorized(current_host, vm):
+        if not await VirtualMachineRepository.is_authorized(server_host, vm):
             return f'Error. You are not authenticated.'
 
         update_data = data_tokens[2:]
@@ -147,10 +148,10 @@ class ShowHardDrivesAction(Action):
 
 class HelpAction(Action):
     async def run(self, data_tokens):
-        return 'Available commands: \r\n' + ', '.join(list(ActionFactory.acts.keys()))
+        return 'Available commands: \r\n' + ', '.join(list(ServerActionFactory.acts.keys()))
 
 
-class ActionFactory:
+class ServerActionFactory:
     acts = {
         'add_vm': AddVMAction,
         'connect_to_vm': ConnectToVMAction,
