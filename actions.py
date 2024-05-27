@@ -43,13 +43,13 @@ class AddVMAction(Action):
 
 
 class ConnectToVMAction(Action):
-    async def run(self, data_tokens) -> Union[str, None]:
+    async def run(self, data_tokens) -> str:
         current_host = project_settings.HOST
         current_port = project_settings.PORT
         # при отключении клиента и сервера authorized_host у вм не сбрасывается. сбрасывается по команде выхода
         vm = await VirtualMachineRepository.get({'host': data_tokens[0], 'port': int(data_tokens[1])},
                                                 self.db_connection)
-
+        vm = vm[0]
         await ConnectionRepository.open_connection(current_host, current_port, vm, self.db_connection)
 
         if await VirtualMachineRepository.is_authorized(current_host, vm):
@@ -60,7 +60,11 @@ class ConnectToVMAction(Action):
 
         if await VirtualMachineRepository.authenticate(login, password, vm):
             await VirtualMachineRepository.authorize(current_host, vm, self.db_connection)
-            return f'Successfully authenticated for VM {vm.host}:{vm.port}.'
+
+            self.writer.write(f'secret:mecret|||Host {current_host} has established connection.'.encode())
+            await self.writer.drain()
+            msg = await self.reader.read(1024)
+            return f'Successfully authenticated for VM {vm.host}:{vm.port}. {msg}'
 
         await ConnectionRepository.close_vm_connections(vm.id, self.db_connection)
         return f'Login or password are invalid. Connection closed.'

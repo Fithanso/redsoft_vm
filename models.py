@@ -17,7 +17,7 @@ class VirtualMachineInput(BaseModel):
 
 
 class VirtualMachineOutput(BaseModel):
-    READONLY_FIELDS: ClassVar[List] = ['id', 'authorized_host', 'hard_drives_ids', 'hard_drive_space']
+    READONLY_FIELDS: ClassVar[List] = ['id', 'hard_drives_ids', 'hard_drive_space']
 
     id: int | None
     ram_amount: float
