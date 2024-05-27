@@ -168,6 +168,7 @@ class ConnectionRepository(AbstractRepository):
 
     @classmethod
     async def open_connection(cls, host, port, vm, db_connection):
+        # VM can only have one connection at a time
         new_connection = Connection(id=None, end_dttm=None, virtual_machine_id=vm.id, connection_host=host,
                                     connection_port=port, start_dttm=datetime.now())
         await ConnectionRepository.close_vm_connections(vm.id, db_connection)

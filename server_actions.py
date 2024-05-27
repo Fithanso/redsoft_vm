@@ -56,8 +56,8 @@ class ConnectToVMAction(Action):
 
         login = await ainput(f'Authentication required for machine #{vm.id}. Enter login >')
         password = await ainput('Enter password >')
-        self.writer.write(f'client_auth{self.client_action_delimiter}{login}:{password}|||Host {server_host} '
-                          f'has established connection and is trying to authenticate'.encode())
+        self.writer.write(f'client_auth{self.client_action_delimiter}{vm.host}:{vm.port}:{login}:{password}'
+                          f'|||Host {server_host} has established connection and is trying to authenticate'.encode())
         await self.writer.drain()
         answer = await self.reader.read(1024)
 

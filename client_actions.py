@@ -25,16 +25,16 @@ class Action(metaclass=abc.ABCMeta):
 class AuthAction(Action):
     async def run(self, data_tokens) -> str:
         # very simple authentication
-        client_host = project_settings.CLIENT_HOST
-        client_port = project_settings.CLIENT_PORT
+        client_host = data_tokens[0]
+        client_port = data_tokens[1]
         # it means that the client takes his username and password and checks them.
         # but in this case, we take it from the general DB.
         # although it would be better do create separate DB for a client
         vm = await VirtualMachineRepository.get({'host': client_host, 'port': int(client_port)},
                                                 self.db_connection)
         vm = vm[0]
-        login = data_tokens[0]
-        password = data_tokens[1]
+        login = data_tokens[2]
+        password = data_tokens[3]
         if await VirtualMachineRepository.authenticate(login, password, vm):
             return 'OK'
         return 'ERROR'
